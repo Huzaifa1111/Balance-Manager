@@ -89,7 +89,20 @@ export default function HomePage() {
 
   const [newPassword, setNewPassword] = useState("")
   const [confirmNewPassword, setConfirmNewPassword] = useState("")
+
+  // Important Section Protection State
+  const [isImportantUnlocked, setIsImportantUnlocked] = useState(false)
+  const [showImportantPasswordDialog, setShowImportantPasswordDialog] = useState(false)
+  const [importantPassInput, setImportantPassInput] = useState("")
+  const [importantConfirmPassInput, setImportantConfirmPassInput] = useState("")
+  const [isSettingImportantPass, setIsSettingImportantPass] = useState(false)
+
   const { toast } = useToast()
+
+  useEffect(() => {
+    const savedPass = localStorage.getItem("important_section_password")
+    setIsSettingImportantPass(!savedPass)
+  }, [])
 
   const {
     entries,
@@ -205,11 +218,59 @@ export default function HomePage() {
         const matchesSearch =
           note.title.toLowerCase().includes(noteSearch.toLowerCase()) ||
           note.content.toLowerCase().includes(noteSearch.toLowerCase())
+
+        // Hide important notes if locked
+        if (note.section === "Important" && !isImportantUnlocked) {
+          return false
+        }
+
         const matchesFilter = noteFilter === "All" || note.section === noteFilter
         return matchesSearch && matchesFilter
       })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-  }, [notes, noteSearch, noteFilter])
+  }, [notes, noteSearch, noteFilter, isImportantUnlocked])
+
+  const handleImportantSectionAccess = () => {
+    const savedPass = localStorage.getItem("important_section_password")
+    if (isImportantUnlocked) {
+      setNoteFilter("Important")
+    } else {
+      setImportantPassInput("")
+      setImportantConfirmPassInput("")
+      setIsSettingImportantPass(!savedPass)
+      setShowImportantPasswordDialog(true)
+    }
+  }
+
+  const handleImportantPasswordSubmit = () => {
+    const savedPass = localStorage.getItem("important_section_password")
+
+    if (!savedPass) {
+      // Setup new password
+      if (importantPassInput.length < 4) {
+        toast({ title: "Error", description: "Password must be at least 4 characters.", variant: "destructive" })
+        return
+      }
+      if (importantPassInput !== importantConfirmPassInput) {
+        toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" })
+        return
+      }
+      localStorage.setItem("important_section_password", importantPassInput)
+      setIsImportantUnlocked(true)
+      setNoteFilter("Important")
+      setShowImportantPasswordDialog(false)
+      toast({ title: "Success", description: "Important section password set!" })
+    } else {
+      // Verify existing password
+      if (importantPassInput === savedPass) {
+        setIsImportantUnlocked(true)
+        setNoteFilter("Important")
+        setShowImportantPasswordDialog(false)
+      } else {
+        toast({ title: "Error", description: "Incorrect password.", variant: "destructive" })
+      }
+    }
+  }
 
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault()
@@ -484,8 +545,15 @@ export default function HomePage() {
                         variant={noteFilter === section ? "default" : "outline"}
                         size="sm"
                         className="rounded-full px-4 h-8 text-xs whitespace-nowrap"
-                        onClick={() => setNoteFilter(section)}
+                        onClick={() => {
+                          if (section === "Important") {
+                            handleImportantSectionAccess()
+                          } else {
+                            setNoteFilter(section)
+                          }
+                        }}
                       >
+                        {section === "Important" && !isImportantUnlocked && <KeyRound className="h-3 w-3 mr-1" />}
                         {section}
                       </Button>
                     ))}
@@ -720,6 +788,52 @@ export default function HomePage() {
         variant="destructive"
         onConfirm={handleDeleteNoteConfirm}
       />
+
+      {/* Important Section Password Dialog */}
+      <Dialog open={showImportantPasswordDialog} onOpenChange={setShowImportantPasswordDialog}>
+        <DialogContent className="sm:max-w-[400px] p-6 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{isSettingImportantPass ? "Protect Important Section" : "Unlock Important Section"}</DialogTitle>
+            <DialogDescription>
+              {isSettingImportantPass
+                ? "Set a separate password for your sensitive notes."
+                : "Enter your section password to view these notes."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="important-pass">{isSettingImportantPass ? "New Password" : "Password"}</Label>
+              <Input
+                id="important-pass"
+                type="password"
+                value={importantPassInput}
+                onChange={(e) => setImportantPassInput(e.target.value)}
+                placeholder="Enter password..."
+                onKeyDown={(e) => e.key === "Enter" && handleImportantPasswordSubmit()}
+              />
+            </div>
+            {isSettingImportantPass && (
+              <div className="space-y-2">
+                <Label htmlFor="important-confirm-pass">Confirm Password</Label>
+                <Input
+                  id="important-confirm-pass"
+                  type="password"
+                  value={importantConfirmPassInput}
+                  onChange={(e) => setImportantConfirmPassInput(e.target.value)}
+                  placeholder="Repeat password..."
+                  onKeyDown={(e) => e.key === "Enter" && handleImportantPasswordSubmit()}
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowImportantPasswordDialog(false)}>Cancel</Button>
+            <Button onClick={handleImportantPasswordSubmit}>
+              {isSettingImportantPass ? "Set & Unlock" : "Unlock Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
