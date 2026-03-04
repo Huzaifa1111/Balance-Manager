@@ -60,7 +60,7 @@ interface Note {
   updatedAt: string
 }
 
-const SECTIONS = ["General", "Reminders", "Budget", "Goals", "Important"]
+const SECTIONS = ["General", "Reminders", "Budget", "Goals", "Important", "Welfare"]
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -72,6 +72,10 @@ export default function HomePage() {
     entry: null,
   })
   const [clearHistoryConfirm, setClearHistoryConfirm] = useState(false)
+  const [noteDeleteConfirm, setNoteDeleteConfirm] = useState<{ show: boolean; note: Note | null }>({
+    show: false,
+    note: null,
+  })
 
   // Enhanced Notes State
   const [notes, setNotes] = useState<Note[]>([])
@@ -166,9 +170,15 @@ export default function HomePage() {
     toast({ title: "Note Updated", description: "Your note has been saved." })
   }
 
-  const handleDeleteNote = (id: string) => {
-    const updatedNotes = notes.filter((n) => n.id !== id)
+  const handleDeleteNoteRequest = (note: Note) => {
+    setNoteDeleteConfirm({ show: true, note })
+  }
+
+  const handleDeleteNoteConfirm = () => {
+    if (!noteDeleteConfirm.note) return
+    const updatedNotes = notes.filter((n) => n.id !== noteDeleteConfirm.note!.id)
     saveNotes(updatedNotes)
+    setNoteDeleteConfirm({ show: false, note: null })
     toast({ title: "Note Deleted", description: "The note has been removed." })
   }
 
@@ -410,14 +420,29 @@ export default function HomePage() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
 
               <TabsContent value="dashboard" className="space-y-6">
-                {(showAddForm || editingEntry) && (
-                  <BalanceEntryForm
-                    entry={editingEntry}
-                    onSubmit={editingEntry ? handleUpdateEntry : handleAddEntry}
-                    onCancel={editingEntry ? handleCancelEdit : () => setShowAddForm(false)}
-                    isEditing={!!editingEntry}
-                  />
-                )}
+                <Dialog open={showAddForm || !!editingEntry} onOpenChange={(open) => {
+                  if (!open) {
+                    if (editingEntry) handleCancelEdit()
+                    else setShowAddForm(false)
+                  }
+                }}>
+                  <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden outline-none border-none sm:rounded-2xl">
+                    <DialogHeader className="p-6 pb-2">
+                      <DialogTitle>{editingEntry ? "Edit Entry" : "Add New Entry"}</DialogTitle>
+                      <DialogDescription>
+                        {editingEntry ? "Update your transaction details." : "Record a new balance change."}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="px-6 pb-6">
+                      <BalanceEntryForm
+                        entry={editingEntry}
+                        onSubmit={editingEntry ? handleUpdateEntry : handleAddEntry}
+                        onCancel={editingEntry ? handleCancelEdit : () => setShowAddForm(false)}
+                        isEditing={!!editingEntry}
+                      />
+                    </div>
+                  </DialogContent>
+                </Dialog>
 
                 <BalanceEntryList
                   entries={entries}
@@ -507,7 +532,7 @@ export default function HomePage() {
                               className="h-6 w-6 text-destructive/70 hover:text-destructive hover:bg-destructive/5"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleDeleteNote(note.id)
+                                handleDeleteNoteRequest(note)
                               }}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -679,6 +704,21 @@ export default function HomePage() {
         cancelText="Cancel"
         variant="destructive"
         onConfirm={handleClearHistoryConfirm}
+      />
+
+      <ConfirmationDialog
+        open={noteDeleteConfirm.show}
+        onOpenChange={(open) => setNoteDeleteConfirm({ show: open, note: noteDeleteConfirm.note })}
+        title="Delete Note"
+        description={
+          noteDeleteConfirm.note
+            ? `Are you sure you want to delete "${noteDeleteConfirm.note.title}"? This action cannot be undone.`
+            : "Are you sure you want to delete this note?"
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteNoteConfirm}
       />
     </>
   )
